@@ -1,0 +1,29 @@
+# Build artifacts
+build/
+build*/
+out/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+*.cmake.user
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Binaries and libs
+*.o
+*.obj
+*.a
+*.so
+*.so.*
+*.dll
+*.dylib
+*.exe
+
+# Internal tools
+.scuba.yml
