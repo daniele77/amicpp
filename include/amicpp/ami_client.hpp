@@ -17,7 +17,6 @@
 #include <memory>
 #include <mutex>
 #include <string>
-#include <thread>
 #include <unordered_map>
 
 namespace amicpp {
@@ -26,7 +25,7 @@ class AmiClient {
 public:
     using EventHandler = std::function<void(const AmiMessage&)>;
 
-    AmiClient();
+    explicit AmiClient(boost::asio::io_context& io_context);
     ~AmiClient();
 
     AmiClient(const AmiClient&) = delete;
@@ -50,16 +49,19 @@ private:
         std::mutex mutex;
         std::condition_variable cv;
         bool ready = false;
+        bool failed = false;
+        std::string error_message;
         AmiMessage message;
     };
 
     std::string next_action_id();
-    void reader_loop();
+    void start_read_loop();
+    void fail_all_pending(const std::string& reason);
     void route_message(const AmiMessage& message);
 
+    boost::asio::io_context& io_context_;
     TcpClient tcp_client_;
-    std::atomic<bool> running_;
-    std::thread reader_thread_;
+    std::atomic<bool> connected_;
     std::string banner_;
 
     std::atomic<std::uint64_t> next_action_id_;

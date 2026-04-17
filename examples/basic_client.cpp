@@ -7,8 +7,11 @@
 #include <amicpp/ami_client.hpp>
 #include <amicpp/ami_session.hpp>
 
+#include <boost/asio.hpp>
+
 #include <iostream>
 #include <string>
+#include <thread>
 
 namespace {
 
@@ -31,16 +34,22 @@ int main(int argc, char* argv[]) {
         return 0;
     }
 
-    const std::string host     = argc > 1 ? argv[1] : "127.0.0.1";
-    const std::string port     = argc > 2 ? argv[2] : "5038";
+    const std::string host = argc > 1 ? argv[1] : "127.0.0.1";
+    const std::string port = argc > 2 ? argv[2] : "5038";
     const std::string username = argc > 3 ? argv[3] : "admin";
-    const std::string secret   = argc > 4 ? argv[4] : "admin";
+    const std::string secret = argc > 4 ? argv[4] : "admin";
 
     std::cout << "Connecting to " << host << ":" << port
               << " as " << username << "...\n";
 
+    boost::asio::io_context io_context;
+    auto work_guard = boost::asio::make_work_guard(io_context);
+    std::thread io_thread([&io_context] {
+        io_context.run();
+    });
+
     try {
-        amicpp::AmiClient client;
+        amicpp::AmiClient client(io_context);
         client.connect(host, port);
 
         std::cout << "Connected to AMI";
@@ -69,8 +78,20 @@ int main(int argc, char* argv[]) {
         client.remove_event_handler(handler_id);
         client.disconnect();
 
+        work_guard.reset();
+        io_context.stop();
+        if (io_thread.joinable()) {
+            io_thread.join();
+        }
+
         return 0;
     } catch (const std::exception& ex) {
+        work_guard.reset();
+        io_context.stop();
+        if (io_thread.joinable()) {
+            io_thread.join();
+        }
+
         std::cerr << "Error: " << ex.what() << std::endl;
         return 1;
     }

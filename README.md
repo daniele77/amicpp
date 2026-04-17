@@ -14,7 +14,8 @@ A modern C++14 library to connect to Asterisk Manager Interface (AMI) over TCP u
 
 ## Features
 
-- Boost.Asio TCP client for AMI transport.
+- Fully asynchronous Boost.Asio AMI transport.
+- External `boost::asio::io_context` provided by the application.
 - RAII session management (`Login`/`Logoff`).
 - Object-oriented API for AMI commands and responses.
 - Modular event callback system for AMI events.
@@ -92,8 +93,16 @@ Generated HTML docs are written under `build/docs/html`.
 #include <amicpp/ami_client.hpp>
 #include <amicpp/ami_session.hpp>
 
+#include <boost/asio.hpp>
+
+#include <thread>
+
 int main() {
-    amicpp::AmiClient client;
+    boost::asio::io_context io_context;
+    auto work_guard = boost::asio::make_work_guard(io_context);
+    std::thread io_thread([&io_context] { io_context.run(); });
+
+    amicpp::AmiClient client(io_context);
     client.connect("127.0.0.1", "5038");
 
     auto handler_id = client.add_event_handler([](const amicpp::AmiMessage& ev) {
@@ -114,6 +123,10 @@ int main() {
 
     client.remove_event_handler(handler_id);
     client.disconnect();
+
+    work_guard.reset();
+    io_context.stop();
+    io_thread.join();
     return 0;
 }
 ```
