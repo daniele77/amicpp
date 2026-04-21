@@ -10,8 +10,6 @@
 #include <amicpp/tcp_client.hpp>
 
 #include <atomic>
-#include <chrono>
-#include <condition_variable>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -24,6 +22,8 @@ namespace amicpp {
 class AmiClient {
 public:
     using EventHandler = std::function<void(const AmiMessage&)>;
+    using ConnectHandler = std::function<void(const std::string&)>;
+    using ActionHandler = std::function<void(bool, const AmiMessage&)>;
 
     explicit AmiClient(boost::asio::io_context& io_context);
     ~AmiClient();
@@ -31,8 +31,8 @@ public:
     AmiClient(const AmiClient&) = delete;
     AmiClient& operator=(const AmiClient&) = delete;
 
-    void connect(const std::string& host, const std::string& port = "5038");
-    void disconnect();
+    void async_connect(const std::string& host, const std::string& port, ConnectHandler handler);
+    void async_disconnect();
 
     bool is_connected() const;
     const std::string& banner() const noexcept;
@@ -40,18 +40,11 @@ public:
     std::string add_event_handler(EventHandler handler);
     bool remove_event_handler(const std::string& handler_id);
 
-    AmiMessage send_action(
-        AmiMessage action,
-        std::chrono::milliseconds timeout = std::chrono::milliseconds(5000));
+    void async_send_action(AmiMessage action, ActionHandler handler);
 
 private:
-    struct PendingResponse {
-        std::mutex mutex;
-        std::condition_variable cv;
-        bool ready = false;
-        bool failed = false;
-        std::string error_message;
-        AmiMessage message;
+    struct PendingAction {
+        ActionHandler handler;
     };
 
     std::string next_action_id();
@@ -70,7 +63,7 @@ private:
     std::unordered_map<std::string, EventHandler> handlers_;
 
     mutable std::mutex pending_mutex_;
-    std::unordered_map<std::string, std::shared_ptr<PendingResponse>> pending_;
+    std::unordered_map<std::string, std::shared_ptr<PendingAction>> pending_;
 };
 
 } // namespace amicpp

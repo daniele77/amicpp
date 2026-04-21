@@ -10,14 +10,14 @@
 
 > GitHub repository: `daniele77/amicpp`.
 
-A modern C++14 library to connect to Asterisk Manager Interface (AMI) over TCP using Boost.
+A modern C++14 library to connect to Asterisk Manager Interface (AMI) over TCP using Boost with a fully asynchronous callback-based API.
 
 ## Features
 
-- Fully asynchronous Boost.Asio AMI transport.
+- Fully asynchronous Boost.Asio AMI transport with callback-based API.
 - External `boost::asio::io_context` provided by the application.
-- RAII session management (`Login`/`Logoff`).
-- Object-oriented API for AMI commands and responses.
+- Async connect/disconnect and action dispatch with callbacks.
+- RAII session management (`Login`/`Logoff`) with internal async synchronization.
 - Modular event callback system for AMI events.
 - CMake build and install support.
 
@@ -58,18 +58,18 @@ cd boost_1_86_0
 
 ```bash
 cmake -S . -B build \
-    -DCMAKE_BUILD_TYPE=Release \
+  -DCMAKE_BUILD_TYPE=Release \
   -DBoost_ROOT=$HOME/opt/boost/1.86.0 \
-    -DBoost_NO_SYSTEM_PATHS=ON
+  -DBoost_NO_SYSTEM_PATHS=ON
 cmake --build build -j
 ```
 
 ### 3) Switch between Boost versions
 
 - Install each version in its own directory, for example:
-    - `~/opt/boost/1.82.0`
-    - `~/opt/boost/1.86.0`
-- Re-run CMake with the desired `BOOST_ROOT`.
+  - `~/opt/boost/1.82.0`
+  - `~/opt/boost/1.86.0`
+- Re-run CMake with the desired `Boost_ROOT`.
 - For cleaner isolation, use one build folder per Boost version (for example `build-boost182`, `build-boost186`).
 
 ## Install
@@ -103,29 +103,34 @@ int main() {
     std::thread io_thread([&io_context] { io_context.run(); });
 
     amicpp::AmiClient client(io_context);
-    client.connect("127.0.0.1", "5038");
 
-    auto handler_id = client.add_event_handler([](const amicpp::AmiMessage& ev) {
-        if (ev.has("Event")) {
-            std::cout << "AMI Event: " << ev.get("Event") << "\n";
+    client.async_connect("127.0.0.1", "5038", [&client](const std::string& result) {
+        if (result.find("error") == std::string::npos) {
+            std::cout << "Connected: " << result << "\n";
+
+            auto handler_id = client.add_event_handler([](const amicpp::AmiMessage& ev) {
+                if (ev.has("Event")) {
+                    std::cout << "Event: " << ev.get("Event") << "\n";
+                }
+            });
+
+            {
+                amicpp::AmiSession session(client, "admin", "secret");
+
+                amicpp::AmiMessage action;
+                action.set("Action", "Ping");
+
+                client.async_send_action(std::move(action), [&client, handler_id](bool success, const amicpp::AmiMessage& response) {
+                    if (success) {
+                        std::cout << "Ping: " << response.get("Response", "Unknown") << "\n";
+                    }
+                    client.remove_event_handler(handler_id);
+                    client.async_disconnect();
+                });
+            }
         }
     });
 
-    {
-        amicpp::AmiSession session(client, "admin", "supersecret");
-
-        amicpp::AmiMessage action;
-        action.set("Action", "Ping");
-        const auto response = client.send_action(action);
-
-        std::cout << "Ping Response: " << response.get("Response", "Unknown") << "\n";
-    }
-
-    client.remove_event_handler(handler_id);
-    client.disconnect();
-
-    work_guard.reset();
-    io_context.stop();
     io_thread.join();
     return 0;
 }
@@ -135,7 +140,7 @@ See the runnable example in `examples/basic_client.cpp`.
 
 ## Status
 
-Project bootstrap release (`0.1.0`), intended as a clean foundation for further AMI command modules.
+Project bootstrap release (`0.1.0`), now with fully asynchronous callback-based API.
 
 ## Releases
 

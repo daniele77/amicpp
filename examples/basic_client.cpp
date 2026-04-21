@@ -50,39 +50,42 @@ int main(int argc, char* argv[]) {
 
     try {
         amicpp::AmiClient client(io_context);
-        client.connect(host, port);
 
-        std::cout << "Connected to AMI";
-        if (!client.banner().empty()) {
-            std::cout << " (" << client.banner() << ")";
-        }
-        std::cout << std::endl;
+        client.async_connect(host, port, [&client, &username, &secret](const std::string& result) {
+            if (result.find("error") != std::string::npos || result.find("Error") != std::string::npos) {
+                std::cerr << "Connection failed: " << result << std::endl;
+                return;
+            }
 
-        auto handler_id = client.add_event_handler([](const amicpp::AmiMessage& event) {
-            if (event.has("Event")) {
-                std::cout << "[EVENT] " << event.get("Event") << std::endl;
+            std::cout << "Connected to AMI: " << result << std::endl;
+
+            auto handler_id = client.add_event_handler([](const amicpp::AmiMessage& event) {
+                if (event.has("Event")) {
+                    std::cout << "[EVENT] " << event.get("Event") << std::endl;
+                }
+            });
+
+            {
+                amicpp::AmiSession session(client, username, secret, "on");
+
+                amicpp::AmiMessage action;
+                action.set("Action", "Ping");
+
+                client.async_send_action(std::move(action), [&client, handler_id](bool success, const amicpp::AmiMessage& response) {
+                    if (success) {
+                        std::cout << "Ping response: " << response.get("Response", "Unknown")
+                                  << " - " << response.get("Message", "") << std::endl;
+                    } else {
+                        std::cout << "Ping failed\n";
+                    }
+                    
+                    client.remove_event_handler(handler_id);
+                    client.async_disconnect();
+                });
             }
         });
 
-        {
-            amicpp::AmiSession session(client, username, secret, "on");
-
-            amicpp::AmiMessage action;
-            action.set("Action", "Ping");
-
-            const auto response = client.send_action(std::move(action));
-            std::cout << "Ping response: " << response.get("Response", "Unknown")
-                      << " - " << response.get("Message", "") << std::endl;
-        }
-
-        client.remove_event_handler(handler_id);
-        client.disconnect();
-
-        work_guard.reset();
-        io_context.stop();
-        if (io_thread.joinable()) {
-            io_thread.join();
-        }
+        io_thread.join();
 
         return 0;
     } catch (const std::exception& ex) {
