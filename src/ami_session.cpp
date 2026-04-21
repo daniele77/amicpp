@@ -6,6 +6,7 @@
 
 #include <amicpp/ami_session.hpp>
 
+#include <chrono>
 #include <stdexcept>
 #include <utility>
 
@@ -18,40 +19,18 @@ AmiSession::AmiSession(
     std::string events)
     : client_(&client),
       logged_in_(false) {
-    
-    std::mutex login_mutex;
-    std::condition_variable login_cv;
-    bool login_done = false;
-    bool login_success = false;
-    std::string login_error;
-
     AmiMessage login;
     login.set("Action", "Login");
     login.set("Username", std::move(username));
     login.set("Secret", std::move(secret));
     login.set("Events", std::move(events));
 
-    client_->async_send_action(std::move(login), [&login_mutex, &login_cv, &login_done, &login_success, &login_error](bool success, const AmiMessage& response) {
-        std::lock_guard<std::mutex> lock(login_mutex);
-        login_done = true;
-        if (success) {
-            const auto status = response.get("Response");
-            if (status == "Success") {
-                login_success = true;
-            } else {
-                login_error = "AMI login failed: " + response.get("Message", "unknown error");
-            }
-        } else {
-            login_error = "AMI login action failed";
-        }
-        login_cv.notify_one();
-    });
+    const auto response = client_->send_action(std::move(login));
+    const auto status = response.get("Response");
 
-    std::unique_lock<std::mutex> lock(login_mutex);
-    login_cv.wait(lock, [&login_done] { return login_done; });
-
-    if (!login_success) {
-        throw std::runtime_error(login_error.empty() ? "AMI login timeout" : login_error);
+    if (status != "Success") {
+        throw std::runtime_error(
+            "AMI login failed: " + response.get("Message", "unknown error"));
     }
 
     logged_in_ = true;
@@ -62,21 +41,12 @@ AmiSession::~AmiSession() noexcept {
         return;
     }
 
-    std::mutex logoff_mutex;
-    std::condition_variable logoff_cv;
-    bool logoff_done = false;
-
-    AmiMessage logoff;
-    logoff.set("Action", "Logoff");
-
-    client_->async_send_action(std::move(logoff), [&logoff_mutex, &logoff_cv, &logoff_done](bool, const AmiMessage&) {
-        std::lock_guard<std::mutex> lock(logoff_mutex);
-        logoff_done = true;
-        logoff_cv.notify_one();
-    });
-
-    std::unique_lock<std::mutex> lock(logoff_mutex);
-    logoff_cv.wait_for(lock, std::chrono::milliseconds(2000), [&logoff_done] { return logoff_done; });
+    try {
+        AmiMessage logoff;
+        logoff.set("Action", "Logoff");
+        (void)client_->send_action(std::move(logoff), std::chrono::milliseconds(2000));
+    } catch (...) {
+    }
 
     logged_in_ = false;
 }

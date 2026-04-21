@@ -10,6 +10,7 @@
 #include <amicpp/tcp_client.hpp>
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <functional>
 #include <memory>
@@ -31,6 +32,9 @@ public:
     AmiClient(const AmiClient&) = delete;
     AmiClient& operator=(const AmiClient&) = delete;
 
+    void connect(const std::string& host, const std::string& port = "5038");
+    void disconnect();
+
     void async_connect(const std::string& host, const std::string& port, ConnectHandler handler);
     void async_disconnect();
 
@@ -40,14 +44,26 @@ public:
     std::string add_event_handler(EventHandler handler);
     bool remove_event_handler(const std::string& handler_id);
 
+    AmiMessage send_action(
+        AmiMessage action,
+        std::chrono::milliseconds timeout = std::chrono::milliseconds(5000));
+
     void async_send_action(AmiMessage action, ActionHandler handler);
+    void async_send_action(
+        AmiMessage action,
+        ActionHandler handler,
+        std::chrono::milliseconds timeout);
 
 private:
     struct PendingAction {
+        std::atomic<bool> completed{false};
         ActionHandler handler;
+        std::shared_ptr<boost::asio::steady_timer> timer;
     };
 
     std::string next_action_id();
+    bool is_error_connect_result(const std::string& result) const;
+    AmiMessage make_error_response(const std::string& message) const;
     void start_read_loop();
     void fail_all_pending(const std::string& reason);
     void route_message(const AmiMessage& message);

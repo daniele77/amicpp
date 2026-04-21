@@ -1,7 +1,7 @@
 # amicpp
 
 ![C++14](https://img.shields.io/badge/C%2B%2B-14-blue.svg)
-![CMake](https://img.shields.io/badge/CMake-%3E%3D%203.16-brightgreen.svg)
+![CMake](https://img.shields.io/badge/CMake-%3E%3D%203.13-brightgreen.svg)
 ![License: BSL-1.0](https://img.shields.io/badge/License-BSL--1.0-lightgrey.svg)
 [![CI](https://github.com/daniele77/amicpp/actions/workflows/ci.yml/badge.svg)](https://github.com/daniele77/amicpp/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/daniele77/amicpp)](https://github.com/daniele77/amicpp/releases)
@@ -10,13 +10,13 @@
 
 > GitHub repository: `daniele77/amicpp`.
 
-A modern C++14 library to connect to Asterisk Manager Interface (AMI) over TCP using Boost with a fully asynchronous callback-based API.
+A modern C++14 library to connect to Asterisk Manager Interface (AMI) over TCP using Boost, supporting both synchronous and asynchronous APIs.
 
 ## Features
 
-- Fully asynchronous Boost.Asio AMI transport with callback-based API.
+- Boost.Asio AMI transport with both synchronous and asynchronous APIs.
 - External `boost::asio::io_context` provided by the application.
-- Async connect/disconnect and action dispatch with callbacks.
+- Sync API (`connect`, `disconnect`, `send_action`) and async API (`async_connect`, `async_disconnect`, `async_send_action`).
 - RAII session management (`Login`/`Logoff`) with internal async synchronization.
 - Modular event callback system for AMI events.
 - CMake build and install support.
@@ -89,6 +89,37 @@ Generated HTML docs are written under `build/docs/html`.
 
 ## Quick start
 
+### Synchronous API
+
+```cpp
+#include <amicpp/ami_client.hpp>
+#include <amicpp/ami_session.hpp>
+
+#include <boost/asio.hpp>
+
+int main() {
+    boost::asio::io_context io_context;
+    amicpp::AmiClient client(io_context);
+
+    client.connect("127.0.0.1", "5038");
+
+    {
+        amicpp::AmiSession session(client, "admin", "secret");
+
+        amicpp::AmiMessage action;
+        action.set("Action", "Ping");
+
+        const auto response = client.send_action(std::move(action));
+        std::cout << response.get("Response", "Unknown") << "\n";
+    }
+
+    client.disconnect();
+    return 0;
+}
+```
+
+### Asynchronous API
+
 ```cpp
 #include <amicpp/ami_client.hpp>
 #include <amicpp/ami_session.hpp>
@@ -105,7 +136,7 @@ int main() {
     amicpp::AmiClient client(io_context);
 
     client.async_connect("127.0.0.1", "5038", [&client](const std::string& result) {
-        if (result.find("error") == std::string::npos) {
+        if (result.find("Connect error:") != 0 && result.find("Banner read error:") != 0) {
             std::cout << "Connected: " << result << "\n";
 
             auto handler_id = client.add_event_handler([](const amicpp::AmiMessage& ev) {
@@ -114,8 +145,17 @@ int main() {
                 }
             });
 
-            {
-                amicpp::AmiSession session(client, "admin", "secret");
+            amicpp::AmiMessage login;
+            login.set("Action", "Login");
+            login.set("Username", "admin");
+            login.set("Secret", "secret");
+
+            client.async_send_action(std::move(login), [&client, handler_id](bool login_ok, const amicpp::AmiMessage& login_resp) {
+                if (!login_ok || login_resp.get("Response") != "Success") {
+                    client.remove_event_handler(handler_id);
+                    client.async_disconnect();
+                    return;
+                }
 
                 amicpp::AmiMessage action;
                 action.set("Action", "Ping");
@@ -124,10 +164,15 @@ int main() {
                     if (success) {
                         std::cout << "Ping: " << response.get("Response", "Unknown") << "\n";
                     }
-                    client.remove_event_handler(handler_id);
-                    client.async_disconnect();
+
+                    amicpp::AmiMessage logoff;
+                    logoff.set("Action", "Logoff");
+                    client.async_send_action(std::move(logoff), [&client, handler_id](bool, const amicpp::AmiMessage&) {
+                        client.remove_event_handler(handler_id);
+                        client.async_disconnect();
+                    });
                 });
-            }
+            });
         }
     });
 
@@ -136,11 +181,31 @@ int main() {
 }
 ```
 
-See the runnable example in `examples/basic_client.cpp`.
+Runnable examples:
+
+- `examples/basic_client.cpp`: dual mode demo (`--sync` / `--async`).
+- `examples/async_client.cpp`: async-only callback chain (`Connect -> Login -> Ping -> Logoff`).
+- `examples/sync_client.cpp`: sync-only flow using `connect`, `AmiSession`, and `send_action`.
+
+## Run examples
+
+```bash
+# Dual mode example (default async mode)
+./build-boost186/amicpp_basic_client 127.0.0.1 5038 admin supersecret
+
+# Dual mode example in sync mode
+./build-boost186/amicpp_basic_client --sync 127.0.0.1 5038 admin supersecret
+
+# Async-only example
+./build-boost186/amicpp_async_client 127.0.0.1 5038 admin supersecret
+
+# Sync-only example
+./build-boost186/amicpp_sync_client 127.0.0.1 5038 admin supersecret
+```
 
 ## Status
 
-Project bootstrap release (`0.1.0`), now with fully asynchronous callback-based API.
+Project bootstrap release (`0.1.0`), now with both synchronous and asynchronous APIs.
 
 ## Releases
 

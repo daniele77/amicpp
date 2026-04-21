@@ -60,6 +60,12 @@ target_link_libraries(amicpp
 if(AMICPP_BUILD_EXAMPLES)
     add_executable(amicpp_basic_client examples/basic_client.cpp)
     target_link_libraries(amicpp_basic_client PRIVATE amicpp::amicpp)
+
+    add_executable(amicpp_async_client examples/async_client.cpp)
+    target_link_libraries(amicpp_async_client PRIVATE amicpp::amicpp)
+
+    add_executable(amicpp_sync_client examples/sync_client.cpp)
+    target_link_libraries(amicpp_sync_client PRIVATE amicpp::amicpp)
 endif()
 
 install(TARGETS amicpp

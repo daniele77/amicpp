@@ -8,8 +8,6 @@
 
 #include <amicpp/ami_client.hpp>
 
-#include <condition_variable>
-#include <mutex>
 #include <string>
 
 namespace amicpp {
