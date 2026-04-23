@@ -4,7 +4,7 @@ Thanks for your interest in contributing to `amicpp`.
 
 ## Development setup
 
-1. Install a C++14 compiler and CMake >= 3.13.
+1. Install a C++14 compiler and CMake >= 3.12.
 2. Install Boost (at least `system`) and pthread support.
 3. Configure and build:
 

@@ -1,12 +1,13 @@
 # amicpp
 
 ![C++14](https://img.shields.io/badge/C%2B%2B-14-blue.svg)
-![CMake](https://img.shields.io/badge/CMake-%3E%3D%203.13-brightgreen.svg)
+![CMake](https://img.shields.io/badge/CMake-%3E%3D%203.12-brightgreen.svg)
 ![License: BSL-1.0](https://img.shields.io/badge/License-BSL--1.0-lightgrey.svg)
 [![CI](https://github.com/daniele77/amicpp/actions/workflows/ci.yml/badge.svg)](https://github.com/daniele77/amicpp/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/daniele77/amicpp)](https://github.com/daniele77/amicpp/releases)
 [![Issues](https://img.shields.io/github/issues/daniele77/amicpp)](https://github.com/daniele77/amicpp/issues)
 [![Stars](https://img.shields.io/github/stars/daniele77/amicpp?style=social)](https://github.com/daniele77/amicpp/stargazers)
+[![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-pink?logo=githubsponsors)](https://github.com/sponsors/daniele77)
 
 > GitHub repository: `daniele77/amicpp`.
 
@@ -23,7 +24,7 @@ A modern C++14 library to connect to Asterisk Manager Interface (AMI) over TCP u
 
 ## Requirements
 
-- CMake >= 3.13
+- CMake >= 3.12
 - C++14 compiler
 - Boost (component: `system`)
 - Threads (`pthread` on Linux)
